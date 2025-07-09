@@ -30,11 +30,23 @@ class OrderViewModel @Inject constructor(
     private val _cartItems = MutableStateFlow<List<CartItem>>(emptyList())
     val cartItems: StateFlow<List<CartItem>> = _cartItems.asStateFlow()
 
+    // Edge case handling for orders
+    private val maxItemQuantity = 5
+    private val maxTotalValue = 1000.0
+
     fun addToCart(menuItemId: String, name: String, price: Double, imageUrl: String? = null) {
         val currentItems = _cartItems.value.toMutableList()
         val existingItem = currentItems.find { it.menuItemId == menuItemId }
         
         if (existingItem != null) {
+            // Check quantity limits (Edge case: Troll orders)
+            if (existingItem.quantity >= maxItemQuantity) {
+                _uiState.value = _uiState.value.copy(
+                    error = "Maximum ${maxItemQuantity} items per type allowed"
+                )
+                return
+            }
+            
             val index = currentItems.indexOf(existingItem)
             currentItems[index] = existingItem.copy(quantity = existingItem.quantity + 1)
         } else {
@@ -48,8 +60,18 @@ class OrderViewModel @Inject constructor(
                 )
             )
         }
-        
+
+        // Check total value limit
+        val totalValue = currentItems.sumOf { it.price * it.quantity }
+        if (totalValue > maxTotalValue) {
+            _uiState.value = _uiState.value.copy(
+                error = "Order total cannot exceed ₹${maxTotalValue}"
+            )
+            return
+        }
+
         _cartItems.value = currentItems
+        _uiState.value = _uiState.value.copy(error = null)
     }
 
     fun removeFromCart(menuItemId: String) {
